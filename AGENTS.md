@@ -20,4 +20,4 @@ Always update the README.md with basic use instructions and changelog
 
 Always review TODO.md for other bugs to fix and features to implement.
 
-Always review AGENTS.md for baseline function / prompts / instructions
+Always review AGENTS.md for baseline function / prompts / instructions / before starting new tasks. If there are conflicts with the new task, prioritize the new task.
