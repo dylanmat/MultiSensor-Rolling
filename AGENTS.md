@@ -9,7 +9,10 @@ the attribute to calculate the rolling average (should only support attributes w
 total length of time frame to use
 Number of data points collect in the time frame
 
+
 Enable a debug log option
+App should allow settings up multiple child devices
+
 
 Don't forget the icon metadata, even if it's blank, it's required.
 
