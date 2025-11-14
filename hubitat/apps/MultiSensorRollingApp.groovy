@@ -1,7 +1,7 @@
 import groovy.transform.Field
 import java.util.UUID
 
-@Field static final String APP_VERSION = "0.1.1"
+@Field static final String APP_VERSION = "0.1.3"
 @Field static final String CHILD_DRIVER = "MultiSensorRollingChild"
 @Field static final String NAMESPACE = "dylanm.mra"
 
@@ -46,7 +46,7 @@ def mainPage() {
             input "newChildTimeframe", "number", title: "Time frame (minutes)", required: false
             input "newChildPoints", "number", title: "Data points to collect", required: false
             paragraph "Tap the button below to create a new child device using the provided settings."
-            appButton("createChild", title: "Create child device")
+            appButton(name: "createChild", title: "Create child device")
         }
         section("Configured rolling averages") {
             if (!state.childConfigs) {
