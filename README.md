@@ -32,6 +32,7 @@ The created child device exposes:
 Enable the debug logging toggle to surface additional information in the Hubitat logs. Debug logging automatically disables itself after 30 minutes to avoid excessive noise.
 
 ## Changelog
+- **0.1.6** – Correct app and child metadata namespaces and parent linkage to ensure installation succeeds.
 - **0.1.5** – Replace the deprecated create-child button with Hubitat child apps and add the dedicated child app code file.
 - **0.1.4** – Restore compatibility with Hubitat's `appButton` signature so the Create child device button renders correctly.
 - **0.1.3** – Restore compatibility with Hubitat's `appButton` signature so the Create child device button renders correctly.

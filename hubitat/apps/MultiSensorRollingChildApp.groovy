@@ -1,13 +1,16 @@
 import groovy.transform.Field
 
-@Field static final String APP_VERSION = "0.1.5"
-@Field static final String NAMESPACE = "dylanm.mra"
+@Field static final String APP_VERSION = "0.1.6"
+@Field static final String NAMESPACE = "dylanm.mra.child"
+@Field static final String PARENT_NAMESPACE = "dylanm.mra"
+@Field static final String PARENT_APP_NAME = "MultiSensor Rolling Average"
+@Field static final String CHILD_DRIVER_NAMESPACE = "dylanm.mra"
 @Field static final String CHILD_DRIVER = "MultiSensorRollingChild"
 
 definition(
     name: "MultiSensor Rolling Average Child",
     namespace: NAMESPACE,
-    parent: "${NAMESPACE}.MultiSensorRollingApp",
+    parent: "${PARENT_NAMESPACE}:${PARENT_APP_NAME}",
     author: "MultiSensor-Rolling",
     description: "Calculate a rolling average for a selected sensor attribute.",
     category: "Convenience",
@@ -116,7 +119,7 @@ private Map buildConfig() {
 private void ensureChildDevice(Map cfg) {
     def child = getChildDevice(childDeviceId())
     if (!child) {
-        child = addChildDevice(NAMESPACE, CHILD_DRIVER, childDeviceId(), [name: cfg.label, label: cfg.label, isComponent: false])
+        child = addChildDevice(CHILD_DRIVER_NAMESPACE, CHILD_DRIVER, childDeviceId(), [name: cfg.label, label: cfg.label, isComponent: false])
         parent?.logInfo "Created child device ${cfg.label}"
     } else if (child.label != cfg.label) {
         child.label = cfg.label
