@@ -1,7 +1,7 @@
 metadata {
     definition(
         name: "MultiSensor Rolling Child",
-        namespace: "com.msr",
+        namespace: "dylanm.mra",
         author: "MultiSensor-Rolling",
         singleThreaded: true,
         importUrl: "",

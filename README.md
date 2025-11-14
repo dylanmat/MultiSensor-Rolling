@@ -30,4 +30,5 @@ The created child device exposes:
 Enable the debug logging toggle to surface additional information in the Hubitat logs. Debug logging automatically disables itself after 30 minutes to avoid excessive noise.
 
 ## Changelog
+- **0.1.1** – Resolved the create-child installation error and standardized the namespace to `dylanm.mra` for app and driver.
 - **0.1.0** – Initial release supporting multiple rolling-average child devices with configurable numeric attributes, time frames, and sample counts.
