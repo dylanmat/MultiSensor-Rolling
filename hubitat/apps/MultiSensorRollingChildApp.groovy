@@ -1,11 +1,11 @@
 import groovy.transform.Field
 
-@Field static final String APP_VERSION = "0.1.6"
+@Field static final String APP_VERSION = "0.2.1"
 @Field static final String NAMESPACE = "dylanm.mra.child"
 @Field static final String PARENT_NAMESPACE = "dylanm.mra"
 @Field static final String PARENT_APP_NAME = "MultiSensor Rolling Average"
 @Field static final String CHILD_DRIVER_NAMESPACE = "dylanm.mra"
-@Field static final String CHILD_DRIVER = "MultiSensorRollingChild"
+@Field static final String CHILD_DRIVER = "MultiSensor Rolling Child"
 
 definition(
     name: "MultiSensor Rolling Average Child",
@@ -25,7 +25,8 @@ preferences {
 }
 
 def mainPage() {
-    dynamicPage(name: "mainPage", title: "Rolling Average Child", uninstall: true) {
+    migrateLegacyTimeframeSetting()
+    dynamicPage(name: "mainPage", title: "Rolling Average Child", install: true, uninstall: true) {
         section("Configuration") {
             label title: "Child device label", required: true
             input "sourceDevice", "capability.sensor", title: "Device to monitor", required: true, submitOnChange: true
@@ -38,9 +39,18 @@ def mainPage() {
             } else {
                 app.removeSetting("sourceAttribute")
             }
-            input "timeframeMinutes", "number", title: "Time frame (minutes)", required: true
+            input "timeframeValue", "number", title: "Time frame amount", required: true, submitOnChange: true
+            input "timeframeUnit", "enum", title: "Time frame unit", required: true, defaultValue: "minutes", options: [
+                minutes: "Minutes",
+                hours  : "Hours",
+                days   : "Days"
+            ]
             input "samplePoints", "number", title: "Data points to collect", required: true
             input "clearHistory", "bool", title: "Reset collected history?", defaultValue: false
+            def intervalText = configuredIntervalText()
+            if (intervalText) {
+                paragraph "Samples will be taken every ${intervalText}."
+            }
         }
         section("Status") {
             paragraph currentStatus()
@@ -65,21 +75,6 @@ def uninstalled() {
     removeChildDevice()
 }
 
-void handleDeviceEvent(evt) {
-    BigDecimal numericValue = safeDecimal(evt.value)
-    if (numericValue == null) {
-        parent?.logWarn "Ignored non-numeric value '${evt.value}' for ${evt.device}"
-        return
-    }
-    Map cfg = state.childConfig
-    if (!cfg) return
-    List history = state.history ?: []
-    history << [time: now(), value: numericValue, unit: evt.unit]
-    state.history = trimHistory(history, cfg)
-    parent?.logDebug "${app.getLabel()} average=${calculateAverage(state.history)} from ${state.history.size()} samples"
-    publishAverage(cfg)
-}
-
 private void initialize() {
     if (!isConfigured()) {
         parent?.logWarn "Child ${app.getLabel() ?: app.name} is not fully configured"
@@ -97,8 +92,8 @@ private void initialize() {
     state.childConfig = cfg
     state.history = trimHistory(state.history ?: [], cfg)
     ensureChildDevice(cfg)
-    subscribeToSource(cfg)
-    publishAverage(cfg)
+    unschedule("sampleNow")
+    sampleNow()
 }
 
 private boolean isConfigured() {
@@ -112,8 +107,17 @@ private Map buildConfig() {
         deviceId : device?.id as Long,
         attribute: settings.sourceAttribute as String,
         timeframe: timeframeMinutes(),
-        points   : samplePoints()
+        points   : samplePoints(),
+        intervalSeconds: calculateIntervalSeconds(timeframeMinutes(), samplePoints())
     ]
+}
+
+void sampleNow() {
+    Map cfg = state.childConfig
+    if (!cfg) return
+    collectSample(cfg)
+    publishAverage(cfg)
+    scheduleNextSample(cfg)
 }
 
 private void ensureChildDevice(Map cfg) {
@@ -126,14 +130,36 @@ private void ensureChildDevice(Map cfg) {
     }
 }
 
-private void subscribeToSource(Map cfg) {
+private void collectSample(Map cfg) {
     def device = settings.sourceDevice
     if (!device) {
         parent?.logWarn "Configured device ${cfg.deviceId} not found for ${app.getLabel()}"
         return
     }
-    subscribe(device, cfg.attribute, "handleDeviceEvent")
-    parent?.logDebug "Subscribed ${app.getLabel()} to ${device.displayName}.${cfg.attribute}"
+    def stateValue = device.currentState(cfg.attribute)
+    if (!stateValue) {
+        parent?.logWarn "${device.displayName}.${cfg.attribute} has no current value to sample"
+        return
+    }
+    BigDecimal numericValue = safeDecimal(stateValue.value)
+    if (numericValue == null) {
+        parent?.logWarn "Ignored non-numeric value '${stateValue.value}' for ${device.displayName}.${cfg.attribute}"
+        return
+    }
+    List history = state.history ?: []
+    history << [time: now(), value: numericValue, unit: stateValue.unit]
+    state.history = trimHistory(history, cfg)
+    parent?.logDebug "${app.getLabel()} sampled ${numericValue}${stateValue.unit ?: ''}"
+}
+
+private void scheduleNextSample(Map cfg) {
+    Integer interval = cfg.intervalSeconds as Integer
+    if (!interval || interval <= 0) {
+        parent?.logWarn "Cannot schedule sampling without a valid interval"
+        return
+    }
+    runIn(interval, "sampleNow")
+    parent?.logDebug "${app.getLabel()} scheduled next sample in ${formatInterval(interval)}"
 }
 
 private void publishAverage(Map cfg) {
@@ -142,7 +168,7 @@ private void publishAverage(Map cfg) {
     List history = state.history ?: []
     BigDecimal average = calculateAverage(history)
     String unit = history ? history.last().unit : null
-    child.updateAverage(average, unit, cfg.attribute, history.size(), cfg.timeframe)
+    child.updateAverage(average, unit, cfg.attribute, history.size(), cfg.timeframe, cfg.intervalSeconds)
 }
 
 private List trimHistory(List history, Map cfg) {
@@ -176,13 +202,30 @@ private BigDecimal safeDecimal(value) {
 }
 
 private Long timeframeMinutes() {
-    def value = settings.timeframeMinutes
-    value instanceof Number ? value.toLong() : value?.toString()?.isNumber() ? value.toString().toBigDecimal().toLong() : null
+    BigDecimal amount = numericSetting("timeframeValue")
+    if (!amount) {
+        amount = numericSetting("timeframeMinutes")
+    }
+    if (!amount) return null
+    String unit = (settings.timeframeUnit ?: "minutes").toString().toLowerCase()
+    BigDecimal minutes
+    switch (unit) {
+        case "days":
+            minutes = amount * 1440G
+            break
+        case "hours":
+            minutes = amount * 60G
+            break
+        default:
+            minutes = amount
+            break
+    }
+    Math.max(1L, Math.round(minutes.doubleValue()))
 }
 
 private Integer samplePoints() {
-    def value = settings.samplePoints
-    value instanceof Number ? value.toInteger() : value?.toString()?.isNumber() ? value.toString().toBigDecimal().toInteger() : null
+    BigDecimal value = numericSetting("samplePoints")
+    value ? Math.max(1, Math.round(value.doubleValue()) as Integer) : null
 }
 
 private String childDeviceId() {
@@ -196,10 +239,86 @@ private String currentStatus() {
     String unit = history ? history.last().unit : ""
     Map cfg = state.childConfig
     String unitText = unit ? " ${unit}" : ""
+    String timeframeText = formatTimeframe(cfg.timeframe as Long)
+    String intervalText = cfg.intervalSeconds ? formatInterval(cfg.intervalSeconds as Integer) : null
     if (avg == null) {
-        return "Waiting for samples for ${cfg.attribute}."
+        return "Waiting for samples for ${cfg.attribute}.${intervalText ? " Next sample in ${intervalText}." : ""}"
     }
-    "Average ${cfg.attribute}: ${avg}${unitText} across ${history.size()} samples"
+    String parts = "Average ${cfg.attribute}: ${avg}${unitText} across ${history.size()} samples"
+    if (timeframeText) {
+        parts += " (time frame: ${timeframeText}"
+        if (intervalText) {
+            parts += ", interval: ${intervalText}"
+        }
+        parts += ")"
+    }
+    parts
+}
+
+private void migrateLegacyTimeframeSetting() {
+    if (settings.timeframeValue != null || settings.timeframeMinutes == null) return
+    BigDecimal legacy = numericSetting("timeframeMinutes")
+    if (legacy != null) {
+        app.updateSetting("timeframeValue", [value: legacy.toPlainString(), type: "number"])
+    }
+    if (!settings.timeframeUnit) {
+        app.updateSetting("timeframeUnit", [value: "minutes", type: "enum"])
+    }
+    app.removeSetting("timeframeMinutes")
+}
+
+private BigDecimal numericSetting(String name) {
+    def value = settings[name]
+    if (value instanceof Number) {
+        return new BigDecimal(value.toString())
+    }
+    if (value instanceof String && value.toString().trim().isNumber()) {
+        return new BigDecimal(value.toString().trim())
+    }
+    null
+}
+
+private Integer calculateIntervalSeconds(Long timeframeMinutes, Integer points) {
+    if (!timeframeMinutes || timeframeMinutes <= 0L || !points || points <= 0) return null
+    double seconds = (timeframeMinutes * 60D) / points
+    Math.max(1, Math.round(seconds) as Integer)
+}
+
+private String formatInterval(Integer seconds) {
+    if (!seconds) return null
+    if (seconds % 86400 == 0) {
+        int days = seconds / 86400
+        return "${days} day${days == 1 ? '' : 's'}"
+    }
+    if (seconds % 3600 == 0) {
+        int hours = seconds / 3600
+        return "${hours} hour${hours == 1 ? '' : 's'}"
+    }
+    if (seconds % 60 == 0) {
+        int minutes = seconds / 60
+        return "${minutes} minute${minutes == 1 ? '' : 's'}"
+    }
+    "${seconds} second${seconds == 1 ? '' : 's'}"
+}
+
+private String formatTimeframe(Long minutes) {
+    if (!minutes) return null
+    if (minutes % 1440 == 0) {
+        long days = minutes / 1440
+        return "${days} day${days == 1 ? '' : 's'}"
+    }
+    if (minutes % 60 == 0) {
+        long hours = minutes / 60
+        return "${hours} hour${hours == 1 ? '' : 's'}"
+    }
+    "${minutes} minute${minutes == 1 ? '' : 's'}"
+}
+
+private String configuredIntervalText() {
+    Long minutes = timeframeMinutes()
+    Integer points = samplePoints()
+    Integer seconds = calculateIntervalSeconds(minutes, points)
+    seconds ? formatInterval(seconds) : null
 }
 
 private void removeChildDevice() {

@@ -14,14 +14,18 @@ metadata {
         attribute "sampleCount", "NUMBER"
         attribute "attributeName", "STRING"
         attribute "timeFrameMinutes", "NUMBER"
+        attribute "samplingIntervalSeconds", "NUMBER"
     }
 }
 
-void updateAverage(BigDecimal value, String unit, String attributeName, Integer samples, Long timeframe) {
+void updateAverage(BigDecimal value, String unit, String attributeName, Integer samples, Long timeframe, Integer intervalSeconds) {
     if (value != null) {
         sendEvent(name: "rollingAverage", value: value, unit: unit)
     }
     sendEvent(name: "sampleCount", value: samples)
     sendEvent(name: "attributeName", value: attributeName)
     sendEvent(name: "timeFrameMinutes", value: timeframe)
+    if (intervalSeconds != null) {
+        sendEvent(name: "samplingIntervalSeconds", value: intervalSeconds)
+    }
 }
