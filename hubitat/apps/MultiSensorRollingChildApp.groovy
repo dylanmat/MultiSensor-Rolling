@@ -1,11 +1,11 @@
 import groovy.transform.Field
 
-@Field static final String APP_VERSION = "0.2.0"
+@Field static final String APP_VERSION = "0.2.1"
 @Field static final String NAMESPACE = "dylanm.mra.child"
 @Field static final String PARENT_NAMESPACE = "dylanm.mra"
 @Field static final String PARENT_APP_NAME = "MultiSensor Rolling Average"
 @Field static final String CHILD_DRIVER_NAMESPACE = "dylanm.mra"
-@Field static final String CHILD_DRIVER = "MultiSensorRollingChild"
+@Field static final String CHILD_DRIVER = "MultiSensor Rolling Child"
 
 definition(
     name: "MultiSensor Rolling Average Child",
