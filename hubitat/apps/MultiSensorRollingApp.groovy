@@ -1,6 +1,6 @@
 import groovy.transform.Field
 
-@Field static final String APP_VERSION = "0.2.1"
+@Field static final String APP_VERSION = "0.2.3"
 @Field static final String NAMESPACE = "dylanm.mra"
 @Field static final String APP_NAME_BASE = "MultiSensor Rolling Average"
 @Field static final String CHILD_APP_NAME = "MultiSensor Rolling Average Child"

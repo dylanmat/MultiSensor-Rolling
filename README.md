@@ -23,6 +23,7 @@ MultiSensor Rolling Average is a Hubitat Elevation parent app that builds child 
 4. Repeat the process to add as many rolling averages as needed. Each child app manages its own rolling history and child device.
 
 The created child device exposes:
+- The same attribute as the monitored device (for example `temperature`, `humidity`, `illuminance`, etc.) so automations can treat the child like a native sensor reporting the rolling average.
 - `rollingAverage` – current average value, reported with the same unit as the source device.
 - `sampleCount` – number of readings currently used for the average.
 - `attributeName` – attribute being averaged.
@@ -33,6 +34,8 @@ The created child device exposes:
 Enable the debug logging toggle to surface additional information in the Hubitat logs. Debug logging automatically disables itself after 30 minutes to avoid excessive noise.
 
 ## Changelog
+- **0.2.3** – Replace the invalid `CurrentMeasurement` capability with Hubitat's `CurrentMeter` so drivers load without capability warnings.
+- **0.2.2** – Child devices now emit the averaged reading using the original attribute name (e.g., `temperature`) so they behave like standard sensors while retaining the `rollingAverage` attribute for compatibility.
 - **0.2.1** – Fix child driver name so new child devices can be created successfully.
 - **0.2.0** – Add scheduled sampling with configurable day/hour/minute time frames so samples are evenly spaced across the window and expose the sampling interval on the child device.
 - **0.1.6** – Correct app and child metadata namespaces and parent linkage to ensure installation succeeds.
