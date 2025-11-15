@@ -17,8 +17,8 @@ MultiSensor Rolling Average is a Hubitat Elevation parent app that builds child 
    - **Child device label** – name for the new device that will display the rolling average.
    - **Device to monitor** – the sensor that generates the numeric attribute events.
    - **Attribute** – one of the device's numeric attributes (temperature, humidity, illuminance, etc.).
-   - **Time frame (minutes)** – the total number of minutes of history to retain for averaging.
-   - **Data points to collect** – maximum number of readings preserved within the time frame.
+   - **Time frame amount** and **time frame unit** – select any combination of minutes, hours, or days to define how much history should be retained for the rolling window.
+   - **Data points to collect** – maximum number of evenly spaced readings preserved within the time frame.
    - Optionally toggle **Reset collected history?** to clear stored samples after changing configuration.
 4. Repeat the process to add as many rolling averages as needed. Each child app manages its own rolling history and child device.
 
@@ -27,11 +27,13 @@ The created child device exposes:
 - `sampleCount` – number of readings currently used for the average.
 - `attributeName` – attribute being averaged.
 - `timeFrameMinutes` – configured time frame for the rolling window.
+- `samplingIntervalSeconds` – the calculated interval between each scheduled sample.
 
 ## Debug Logging
 Enable the debug logging toggle to surface additional information in the Hubitat logs. Debug logging automatically disables itself after 30 minutes to avoid excessive noise.
 
 ## Changelog
+- **0.2.0** – Add scheduled sampling with configurable day/hour/minute time frames so samples are evenly spaced across the window and expose the sampling interval on the child device.
 - **0.1.6** – Correct app and child metadata namespaces and parent linkage to ensure installation succeeds.
 - **0.1.5** – Replace the deprecated create-child button with Hubitat child apps and add the dedicated child app code file.
 - **0.1.4** – Restore compatibility with Hubitat's `appButton` signature so the Create child device button renders correctly.
