@@ -32,7 +32,7 @@ metadata {
         capability "EnergyMeter"
         capability "PressureMeasurement"
         capability "VoltageMeasurement"
-        capability "CurrentMeasurement"
+        capability "CurrentMeter"
         attribute "rollingAverage", "NUMBER"
         attribute "sampleCount", "NUMBER"
         attribute "attributeName", "STRING"
