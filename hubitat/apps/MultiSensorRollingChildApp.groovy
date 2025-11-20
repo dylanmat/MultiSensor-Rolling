@@ -1,6 +1,6 @@
 import groovy.transform.Field
 
-@Field static final String APP_VERSION = "0.2.4"
+@Field static final String APP_VERSION = "0.2.5"
 @Field static final String NAMESPACE = "dylanm.mra.child"
 @Field static final String PARENT_NAMESPACE = "dylanm.mra"
 @Field static final String PARENT_APP_NAME = "MultiSensor Rolling Average"
@@ -178,7 +178,7 @@ void ensureSamplingActive() {
     if (!cfg) return
     Long expected = state.nextSampleEpoch as Long
     Integer interval = cfg.intervalSeconds as Integer
-    Long graceMs = interval ? Math.max(60000L, (interval * 1000L) / 2L) : 60000L
+    Long graceMs = interval ? Math.max(60000L, (interval * 1000L).intdiv(2) as Long) : 60000L
     if (!expected || now() > (expected + graceMs)) {
         parent?.logWarn "${app.getLabel()} sampling schedule missing or stale; restarting sampling"
         unschedule("sampleNow")
