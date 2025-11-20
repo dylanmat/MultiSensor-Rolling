@@ -34,6 +34,8 @@ The created child device exposes:
 Enable the debug logging toggle to surface additional information in the Hubitat logs. Debug logging automatically disables itself after 30 minutes to avoid excessive noise.
 
 ## Changelog
+- **0.2.5** – Fix sampling watchdog grace calculation to avoid type mismatches and keep stalled schedules restarting cleanly.
+- **0.2.4** – Add a 1,000-point safety cap with warnings, trim history on every sample, and add a watchdog that restarts sampling if the schedule disappears or stalls.
 - **0.2.3** – Replace the invalid `CurrentMeasurement` capability with Hubitat's `CurrentMeter` so drivers load without capability warnings.
 - **0.2.2** – Child devices now emit the averaged reading using the original attribute name (e.g., `temperature`) so they behave like standard sensors while retaining the `rollingAverage` attribute for compatibility.
 - **0.2.1** – Fix child driver name so new child devices can be created successfully.

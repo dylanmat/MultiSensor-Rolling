@@ -1,11 +1,12 @@
 import groovy.transform.Field
 
-@Field static final String APP_VERSION = "0.2.3"
+@Field static final String APP_VERSION = "0.2.5"
 @Field static final String NAMESPACE = "dylanm.mra.child"
 @Field static final String PARENT_NAMESPACE = "dylanm.mra"
 @Field static final String PARENT_APP_NAME = "MultiSensor Rolling Average"
 @Field static final String CHILD_DRIVER_NAMESPACE = "dylanm.mra"
 @Field static final String CHILD_DRIVER = "MultiSensor Rolling Child"
+@Field static final Integer MAX_SAMPLE_POINTS = 1000
 
 definition(
     name: "MultiSensor Rolling Average Child",
@@ -80,6 +81,7 @@ private void initialize() {
         parent?.logWarn "Child ${app.getLabel() ?: app.name} is not fully configured"
         return
     }
+    unschedule()
     Map cfg = buildConfig()
     Map previous = state.childConfig ?: [:]
     if (settings.clearHistory) {
@@ -91,8 +93,9 @@ private void initialize() {
     }
     state.childConfig = cfg
     state.history = trimHistory(state.history ?: [], cfg)
+    state.nextSampleEpoch = null
     ensureChildDevice(cfg)
-    unschedule("sampleNow")
+    scheduleHealthCheck()
     sampleNow()
 }
 
@@ -102,19 +105,22 @@ private boolean isConfigured() {
 
 private Map buildConfig() {
     def device = settings.sourceDevice
+    Long minutes = timeframeMinutes()
+    Integer points = samplePoints()
     [
         label    : app.getLabel(),
         deviceId : device?.id as Long,
         attribute: settings.sourceAttribute as String,
-        timeframe: timeframeMinutes(),
-        points   : samplePoints(),
-        intervalSeconds: calculateIntervalSeconds(timeframeMinutes(), samplePoints())
+        timeframe: minutes,
+        points   : points,
+        intervalSeconds: calculateIntervalSeconds(minutes, points)
     ]
 }
 
 void sampleNow() {
     Map cfg = state.childConfig
     if (!cfg) return
+    state.history = trimHistory(state.history ?: [], cfg)
     collectSample(cfg)
     publishAverage(cfg)
     scheduleNextSample(cfg)
@@ -158,8 +164,26 @@ private void scheduleNextSample(Map cfg) {
         parent?.logWarn "Cannot schedule sampling without a valid interval"
         return
     }
-    runIn(interval, "sampleNow")
+    runIn(interval, "sampleNow", [overwrite: true])
+    state.nextSampleEpoch = now() + (interval * 1000L)
     parent?.logDebug "${app.getLabel()} scheduled next sample in ${formatInterval(interval)}"
+}
+
+private void scheduleHealthCheck() {
+    runEvery30Minutes("ensureSamplingActive")
+}
+
+void ensureSamplingActive() {
+    Map cfg = state.childConfig
+    if (!cfg) return
+    Long expected = state.nextSampleEpoch as Long
+    Integer interval = cfg.intervalSeconds as Integer
+    Long graceMs = interval ? Math.max(60000L, (interval * 1000L).intdiv(2) as Long) : 60000L
+    if (!expected || now() > (expected + graceMs)) {
+        parent?.logWarn "${app.getLabel()} sampling schedule missing or stale; restarting sampling"
+        unschedule("sampleNow")
+        sampleNow()
+    }
 }
 
 private void publishAverage(Map cfg) {
@@ -174,7 +198,12 @@ private void publishAverage(Map cfg) {
 private List trimHistory(List history, Map cfg) {
     Long cutoff = now() - (cfg.timeframe as Long) * 60000L
     List trimmed = history.findAll { it.time >= cutoff }
-    Integer maxPoints = cfg.points as Integer
+    Integer configuredPoints = cfg.points as Integer
+    Integer maxPoints = configuredPoints ? Math.min(configuredPoints, MAX_SAMPLE_POINTS) : null
+    if (configuredPoints && configuredPoints > MAX_SAMPLE_POINTS && !(state.maxPointsWarned as Boolean)) {
+        parent?.logWarn "History limited to ${MAX_SAMPLE_POINTS} points to avoid exceeding the supported maximum"
+        state.maxPointsWarned = true
+    }
     if (maxPoints && trimmed.size() > maxPoints) {
         trimmed = trimmed.takeRight(maxPoints)
     }
@@ -225,7 +254,17 @@ private Long timeframeMinutes() {
 
 private Integer samplePoints() {
     BigDecimal value = numericSetting("samplePoints")
-    value ? Math.max(1, Math.round(value.doubleValue()) as Integer) : null
+    if (!value) return null
+    Integer rounded = Math.max(1, Math.round(value.doubleValue()) as Integer)
+    if (rounded > MAX_SAMPLE_POINTS) {
+        if (!(state.maxPointsWarned as Boolean)) {
+            parent?.logWarn "Requested ${rounded} sample points exceeds supported maximum ${MAX_SAMPLE_POINTS}; clamping to ${MAX_SAMPLE_POINTS}"
+            state.maxPointsWarned = true
+        }
+        return MAX_SAMPLE_POINTS
+    }
+    state.maxPointsWarned = false
+    rounded
 }
 
 private String childDeviceId() {
@@ -241,8 +280,15 @@ private String currentStatus() {
     String unitText = unit ? " ${unit}" : ""
     String timeframeText = formatTimeframe(cfg.timeframe as Long)
     String intervalText = cfg.intervalSeconds ? formatInterval(cfg.intervalSeconds as Integer) : null
+    Long nextSampleMs = state.nextSampleEpoch as Long
     if (avg == null) {
-        return "Waiting for samples for ${cfg.attribute}.${intervalText ? " Next sample in ${intervalText}." : ""}"
+        String waiting = "Waiting for samples for ${cfg.attribute}."
+        if (nextSampleMs) {
+            waiting += " Next sample in ${formatInterval(Math.max(1, ((nextSampleMs - now()) / 1000L) as Integer))}."
+        } else if (intervalText) {
+            waiting += " Next sample in ${intervalText}."
+        }
+        return waiting
     }
     String parts = "Average ${cfg.attribute}: ${avg}${unitText} across ${history.size()} samples"
     if (timeframeText) {
@@ -251,6 +297,10 @@ private String currentStatus() {
             parts += ", interval: ${intervalText}"
         }
         parts += ")"
+    }
+    if (nextSampleMs) {
+        long remainingSeconds = ((nextSampleMs - now()) / 1000L) as Long
+        parts += " Next sample in ${formatInterval(Math.max(1, remainingSeconds as Integer))}."
     }
     parts
 }
