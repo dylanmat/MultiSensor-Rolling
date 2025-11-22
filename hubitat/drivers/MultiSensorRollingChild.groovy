@@ -44,9 +44,13 @@ metadata {
     }
 }
 
+preferences {
+    input name: "logAttributeChanges", type: "bool", title: "Log attribute changes to info", defaultValue: false, required: false
+}
+
 void updateAverage(BigDecimal value, String unit, String attributeName, Integer samples, Long timeframe, Integer intervalSeconds) {
     if (value != null) {
-        sendEvent(name: "rollingAverage", value: value, unit: unit)
+        sendTrackedEvent(name: "rollingAverage", value: value, unit: unit)
         String attr = attributeName?.toString()?.trim()
         if (attr) {
             if (!device?.hasAttribute(attr) && !SUPPORTED_ATTRIBUTES.contains(attr)) {
@@ -58,13 +62,37 @@ void updateAverage(BigDecimal value, String unit, String attributeName, Integer 
                 }
             }
             String description = "${device.displayName} rolling ${attr ?: 'value'} average is ${value}${unit ?: ''}"
-            sendEvent(name: attr, value: value, unit: unit, descriptionText: description)
+            sendTrackedEvent(name: attr, value: value, unit: unit, descriptionText: description)
         }
     }
-    sendEvent(name: "sampleCount", value: samples)
-    sendEvent(name: "attributeName", value: attributeName)
-    sendEvent(name: "timeFrameMinutes", value: timeframe)
+    sendTrackedEvent(name: "sampleCount", value: samples)
+    sendTrackedEvent(name: "attributeName", value: attributeName)
+    sendTrackedEvent(name: "timeFrameMinutes", value: timeframe)
     if (intervalSeconds != null) {
-        sendEvent(name: "samplingIntervalSeconds", value: intervalSeconds)
+        sendTrackedEvent(name: "samplingIntervalSeconds", value: intervalSeconds)
     }
+}
+
+private void sendTrackedEvent(Map event) {
+    if (!event?.name) return
+    boolean changed = attributeChanged(event.name as String, event.value, event.unit?.toString())
+    sendEvent(event)
+    if (changed) {
+        logAttributeChange(event)
+    }
+}
+
+private boolean attributeChanged(String name, value, String unit) {
+    def current = device?.currentState(name)
+    if (!current) return true
+    String newValue = value?.toString()
+    String currentValue = current?.value?.toString()
+    if (newValue != currentValue) return true
+    unit && current?.unit?.toString() != unit
+}
+
+private void logAttributeChange(Map event) {
+    if (!(settings.logAttributeChanges as Boolean)) return
+    String description = event.descriptionText ?: "${device.displayName} ${event.name} is ${event.value}${event.unit ?: ''}"
+    log.info description
 }
