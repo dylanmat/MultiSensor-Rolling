@@ -30,10 +30,13 @@ The created child device exposes:
 - `timeFrameMinutes` – configured time frame for the rolling window.
 - `samplingIntervalSeconds` – the calculated interval between each scheduled sample.
 
+Each created device also exposes a preference to log attribute changes. Enable the option in the device preferences to mirror state changes to the Hubitat log at the info level.
+
 ## Debug Logging
 Enable the debug logging toggle to surface additional information in the Hubitat logs. Debug logging automatically disables itself after 30 minutes to avoid excessive noise.
 
 ## Changelog
+- **0.2.7** – Add a per-device toggle to log attribute changes at the info level.
 - **0.2.6** – Round calculated rolling averages to two decimal places for consistent reporting.
 - **0.2.5** – Fix sampling watchdog grace calculation to avoid type mismatches and keep stalled schedules restarting cleanly.
 - **0.2.4** – Add a 1,000-point safety cap with warnings, trim history on every sample, and add a watchdog that restarts sampling if the schedule disappears or stalls.

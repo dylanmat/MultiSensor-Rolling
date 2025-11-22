@@ -1,7 +1,7 @@
 import groovy.transform.Field
 import java.math.RoundingMode
 
-@Field static final String APP_VERSION = "0.2.6"
+@Field static final String APP_VERSION = "0.2.7"
 @Field static final String NAMESPACE = "dylanm.mra.child"
 @Field static final String PARENT_NAMESPACE = "dylanm.mra"
 @Field static final String PARENT_APP_NAME = "MultiSensor Rolling Average"
