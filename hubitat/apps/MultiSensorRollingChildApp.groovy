@@ -1,6 +1,7 @@
 import groovy.transform.Field
+import java.math.RoundingMode
 
-@Field static final String APP_VERSION = "0.2.5"
+@Field static final String APP_VERSION = "0.2.6"
 @Field static final String NAMESPACE = "dylanm.mra.child"
 @Field static final String PARENT_NAMESPACE = "dylanm.mra"
 @Field static final String PARENT_APP_NAME = "MultiSensor Rolling Average"
@@ -212,7 +213,9 @@ private List trimHistory(List history, Map cfg) {
 
 private BigDecimal calculateAverage(List history) {
     if (!history) return null
-    (history.collect { it.value }.sum() / history.size())
+    BigDecimal sum = history.collect { it.value }.sum() as BigDecimal
+    BigDecimal average = sum / history.size()
+    average.setScale(2, RoundingMode.HALF_UP)
 }
 
 private List<String> getNumericAttributes(device) {
