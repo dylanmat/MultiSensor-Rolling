@@ -1,7 +1,7 @@
 import groovy.transform.Field
 import java.math.RoundingMode
 
-@Field static final String APP_VERSION = "0.2.7"
+@Field static final String APP_VERSION = "0.2.8"
 @Field static final String NAMESPACE = "dylanm.mra.child"
 @Field static final String PARENT_NAMESPACE = "dylanm.mra"
 @Field static final String PARENT_APP_NAME = "MultiSensor Rolling Average"
@@ -41,12 +41,12 @@ def mainPage() {
             } else {
                 app.removeSetting("sourceAttribute")
             }
-            input "timeframeValue", "number", title: "Time frame amount", required: true, submitOnChange: true
             input "timeframeUnit", "enum", title: "Time frame unit", required: true, defaultValue: "minutes", submitOnChange: true, options: [
                 minutes: "Minutes",
                 hours  : "Hours",
                 days   : "Days"
             ]
+            input "timeframeValue", "number", title: "Time frame amount", required: true, submitOnChange: true
             if (usesDailyAnchor()) {
                 input "dailySampleTime", "time", title: "Sample time of day", required: false
             }
@@ -118,7 +118,7 @@ private Map buildConfig() {
         attribute: settings.sourceAttribute as String,
         timeframe: minutes,
         points   : points,
-        intervalSeconds: calculateIntervalSeconds(minutes, points)
+        intervalSeconds: calculateIntervalSeconds(minutes)
     ]
     Date anchor = dailyAnchorDate()
     if (anchor) {
@@ -219,8 +219,7 @@ private void publishAverage(Map cfg) {
 }
 
 private List trimHistory(List history, Map cfg) {
-    Long cutoff = now() - (cfg.timeframe as Long) * 60000L
-    List trimmed = history.findAll { it.time >= cutoff }
+    List trimmed = history ?: []
     Integer configuredPoints = cfg.points as Integer
     Integer maxPoints = configuredPoints ? Math.min(configuredPoints, MAX_SAMPLE_POINTS) : null
     if (configuredPoints && configuredPoints > MAX_SAMPLE_POINTS && !(state.maxPointsWarned as Boolean)) {
@@ -303,7 +302,7 @@ private String currentStatus() {
     String unit = history ? history.last().unit : ""
     Map cfg = state.childConfig
     String unitText = unit ? " ${unit}" : ""
-    String timeframeText = formatTimeframe(cfg.timeframe as Long)
+    String frequencyText = formatTimeframe(cfg.timeframe as Long)
     String intervalText = cfg.intervalSeconds ? formatInterval(cfg.intervalSeconds as Integer) : null
     String anchorText = cfg.dailySampleEpoch ? formatTimeOfDay(cfg.dailySampleEpoch as Long) : null
     Long nextSampleMs = state.nextSampleEpoch as Long
@@ -317,11 +316,8 @@ private String currentStatus() {
         return waiting
     }
     String parts = "Average ${cfg.attribute}: ${avg}${unitText} across ${history.size()} samples"
-    if (timeframeText) {
-        parts += " (time frame: ${timeframeText}"
-        if (intervalText) {
-            parts += ", interval: ${intervalText}"
-        }
+    if (frequencyText) {
+        parts += " (frequency: ${frequencyText}"
         if (anchorText) {
             parts += ", anchor: ${anchorText}"
         }
@@ -370,9 +366,9 @@ private Date dailyAnchorDate() {
     anchor
 }
 
-private Integer calculateIntervalSeconds(Long timeframeMinutes, Integer points) {
-    if (!timeframeMinutes || timeframeMinutes <= 0L || !points || points <= 0) return null
-    double seconds = (timeframeMinutes * 60D) / points
+private Integer calculateIntervalSeconds(Long timeframeMinutes) {
+    if (!timeframeMinutes || timeframeMinutes <= 0L) return null
+    double seconds = timeframeMinutes * 60D
     Math.max(1, Math.round(seconds) as Integer)
 }
 
@@ -414,8 +410,7 @@ private String formatTimeOfDay(Long epochMs) {
 
 private String configuredIntervalText() {
     Long minutes = timeframeMinutes()
-    Integer points = samplePoints()
-    Integer seconds = calculateIntervalSeconds(minutes, points)
+    Integer seconds = calculateIntervalSeconds(minutes)
     seconds ? formatInterval(seconds) : null
 }
 

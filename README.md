@@ -17,9 +17,10 @@ MultiSensor Rolling Average is a Hubitat Elevation parent app that builds child 
    - **Child device label** – name for the new device that will display the rolling average.
    - **Device to monitor** – the sensor that generates the numeric attribute events.
    - **Attribute** – one of the device's numeric attributes (temperature, humidity, illuminance, etc.).
-   - **Time frame amount** and **time frame unit** – select any combination of minutes, hours, or days to define how much history should be retained for the rolling window.
-   - **Sample time of day** – shown only when **Time frame unit** is **Days**. The first scheduled sample is anchored to the next occurrence of this time; subsequent samples continue at the calculated interval.
-   - **Data points to collect** – maximum number of evenly spaced readings preserved within the time frame.
+   - **Time frame unit** – select minutes, hours, or days for the sampling frequency.
+   - **Time frame amount** – number of selected units between samples.
+   - **Sample time of day** – shown only when **Time frame unit** is **Days**. The first scheduled sample is anchored to the next occurrence of this time; subsequent samples continue at the selected day interval.
+   - **Data points to collect** – maximum number of samples to store and average.
    - Optionally toggle **Reset collected history?** to clear stored samples after changing configuration.
 4. Repeat the process to add as many rolling averages as needed. Each child app manages its own rolling history and child device.
 
@@ -28,13 +29,14 @@ The created child device exposes:
 - `rollingAverage` – current average value, reported with the same unit as the source device.
 - `sampleCount` – number of readings currently used for the average.
 - `attributeName` – attribute being averaged.
-- `timeFrameMinutes` – configured time frame for the rolling window.
-- `samplingIntervalSeconds` – the calculated interval between each scheduled sample.
+- `timeFrameMinutes` – configured sampling frequency in minutes.
+- `samplingIntervalSeconds` – the interval between each scheduled sample.
 
 ## Debug Logging
 Enable the debug logging toggle to surface additional information in the Hubitat logs. Debug logging automatically disables itself after 30 minutes to avoid excessive noise.
 
 ## Changelog
+- **0.2.8** – Treat the time frame amount and unit as the sampling frequency, with data points controlling only retained sample count.
 - **0.2.7** – Add an optional day-based sample time that anchors the first scheduled sample when the time frame unit is Days.
 - **0.2.6** – Round calculated rolling averages to two decimal places for consistent reporting.
 - **0.2.5** – Fix sampling watchdog grace calculation to avoid type mismatches and keep stalled schedules restarting cleanly.
