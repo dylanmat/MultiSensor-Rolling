@@ -1,7 +1,7 @@
 import groovy.transform.Field
 import java.math.RoundingMode
 
-@Field static final String APP_VERSION = "0.2.6"
+@Field static final String APP_VERSION = "0.2.7"
 @Field static final String NAMESPACE = "dylanm.mra.child"
 @Field static final String PARENT_NAMESPACE = "dylanm.mra"
 @Field static final String PARENT_APP_NAME = "MultiSensor Rolling Average"
@@ -42,16 +42,20 @@ def mainPage() {
                 app.removeSetting("sourceAttribute")
             }
             input "timeframeValue", "number", title: "Time frame amount", required: true, submitOnChange: true
-            input "timeframeUnit", "enum", title: "Time frame unit", required: true, defaultValue: "minutes", options: [
+            input "timeframeUnit", "enum", title: "Time frame unit", required: true, defaultValue: "minutes", submitOnChange: true, options: [
                 minutes: "Minutes",
                 hours  : "Hours",
                 days   : "Days"
             ]
+            if (usesDailyAnchor()) {
+                input "dailySampleTime", "time", title: "Sample time of day", required: false
+            }
             input "samplePoints", "number", title: "Data points to collect", required: true
             input "clearHistory", "bool", title: "Reset collected history?", defaultValue: false
             def intervalText = configuredIntervalText()
             if (intervalText) {
-                paragraph "Samples will be taken every ${intervalText}."
+                String anchorText = configuredAnchorText()
+                paragraph "Samples will be taken every ${intervalText}${anchorText ? ", anchored at ${anchorText}" : ""}."
             }
         }
         section("Status") {
@@ -97,7 +101,7 @@ private void initialize() {
     state.nextSampleEpoch = null
     ensureChildDevice(cfg)
     scheduleHealthCheck()
-    sampleNow()
+    scheduleInitialSample(cfg)
 }
 
 private boolean isConfigured() {
@@ -108,7 +112,7 @@ private Map buildConfig() {
     def device = settings.sourceDevice
     Long minutes = timeframeMinutes()
     Integer points = samplePoints()
-    [
+    Map cfg = [
         label    : app.getLabel(),
         deviceId : device?.id as Long,
         attribute: settings.sourceAttribute as String,
@@ -116,6 +120,12 @@ private Map buildConfig() {
         points   : points,
         intervalSeconds: calculateIntervalSeconds(minutes, points)
     ]
+    Date anchor = dailyAnchorDate()
+    if (anchor) {
+        cfg.dailySampleTime = settings.dailySampleTime
+        cfg.dailySampleEpoch = anchor.time
+    }
+    cfg
 }
 
 void sampleNow() {
@@ -168,6 +178,18 @@ private void scheduleNextSample(Map cfg) {
     runIn(interval, "sampleNow", [overwrite: true])
     state.nextSampleEpoch = now() + (interval * 1000L)
     parent?.logDebug "${app.getLabel()} scheduled next sample in ${formatInterval(interval)}"
+}
+
+private void scheduleInitialSample(Map cfg) {
+    Long anchorEpoch = cfg.dailySampleEpoch as Long
+    if (!anchorEpoch) {
+        sampleNow()
+        return
+    }
+    Long delaySeconds = Math.max(1L, ((anchorEpoch - now()) / 1000L) as Long)
+    runIn(delaySeconds as Integer, "sampleNow", [overwrite: true])
+    state.nextSampleEpoch = anchorEpoch
+    parent?.logDebug "${app.getLabel()} scheduled first sample at ${formatTimeOfDay(anchorEpoch)}"
 }
 
 private void scheduleHealthCheck() {
@@ -283,6 +305,7 @@ private String currentStatus() {
     String unitText = unit ? " ${unit}" : ""
     String timeframeText = formatTimeframe(cfg.timeframe as Long)
     String intervalText = cfg.intervalSeconds ? formatInterval(cfg.intervalSeconds as Integer) : null
+    String anchorText = cfg.dailySampleEpoch ? formatTimeOfDay(cfg.dailySampleEpoch as Long) : null
     Long nextSampleMs = state.nextSampleEpoch as Long
     if (avg == null) {
         String waiting = "Waiting for samples for ${cfg.attribute}."
@@ -298,6 +321,9 @@ private String currentStatus() {
         parts += " (time frame: ${timeframeText}"
         if (intervalText) {
             parts += ", interval: ${intervalText}"
+        }
+        if (anchorText) {
+            parts += ", anchor: ${anchorText}"
         }
         parts += ")"
     }
@@ -329,6 +355,19 @@ private BigDecimal numericSetting(String name) {
         return new BigDecimal(value.toString().trim())
     }
     null
+}
+
+private boolean usesDailyAnchor() {
+    (settings.timeframeUnit ?: "minutes").toString().toLowerCase() == "days"
+}
+
+private Date dailyAnchorDate() {
+    if (!usesDailyAnchor() || !settings.dailySampleTime) return null
+    Date anchor = timeToday(settings.dailySampleTime)
+    if (anchor.time <= now() && (now() - anchor.time) >= 60000L) {
+        anchor = new Date(anchor.time + 86400000L)
+    }
+    anchor
 }
 
 private Integer calculateIntervalSeconds(Long timeframeMinutes, Integer points) {
@@ -367,11 +406,22 @@ private String formatTimeframe(Long minutes) {
     "${minutes} minute${minutes == 1 ? '' : 's'}"
 }
 
+private String formatTimeOfDay(Long epochMs) {
+    if (!epochMs) return null
+    TimeZone tz = location?.timeZone ?: TimeZone.getDefault()
+    new Date(epochMs).format("h:mm a", tz)
+}
+
 private String configuredIntervalText() {
     Long minutes = timeframeMinutes()
     Integer points = samplePoints()
     Integer seconds = calculateIntervalSeconds(minutes, points)
     seconds ? formatInterval(seconds) : null
+}
+
+private String configuredAnchorText() {
+    Date anchor = dailyAnchorDate()
+    anchor ? formatTimeOfDay(anchor.time) : null
 }
 
 private void removeChildDevice() {
